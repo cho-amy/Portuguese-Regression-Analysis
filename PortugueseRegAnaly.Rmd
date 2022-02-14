@@ -1,0 +1,299 @@
+---
+title: "Regression Analysis of Student Performance in Portuguese Secondary Schools"
+author: "Amy Cho"
+date: "6/2/2021"
+output: pdf_document
+---
+## Introduction and Data Source
+
+This project focuses on factors affecting student academic achievement in the secondary education of two Portuguese schools. The metrics in this data set include Math and Portuguese language grades, as well as 26 different demographic, social, and school related descriptive attributes. The data set includes data on 382 students between ages 15 and 22 as well as data describing family size, parent education, parent marital status, commute time, time spent studying every week, and more. 
+
+I will first investigate the impact of time spent studying on final grades and then analyze the different factors that affect student academic performance. Subsequently, I will test to determine which factors have the highest magnitude of effect on student grades and create models based on these results.
+
+The data is sourced from Paulo Cortez, University of Minho, GuimarÃ£es, Portugal, http://www3.dsi.uminho.pt/pcortez and accessed through the UCI Machine Learning Institute: https://archive.ics.uci.edu/ml/datasets/Student+Performance#
+
+
+# Questions of Interest
+
+1. How does the amount of time spent studying relate to students’ performance? Is there any effect, and what is the magnitude of this impact on academic achievement? 
+
+2. Which predictors are most relevant and accurate in influencing student academic performance?
+
+## 4. Summary of Methods 
+
+After cleaning the data of any significant outliers, I use OLS regressions to look at the relationship between study time and final grade, and the histogram distributions for language and math grade according to metrics on the amount of time spent studying per week.  I then apply t-tests and F-tests to look for significant correlations, and to check for any relevant omitted variables. 
+
+I then use pair graphs to look at these general correlations and relationships and decide which ones are most suited for building the models.
+
+Finally, I utilize a stepwise analysis and use AIC, BIC, and best subset regression to find the most relevant explanatory variables for final grade in language and math. The resultant subset of explanatory variables are used to create descriptive models, where I then check LINE assumptions and analyze the models. 
+
+### Exploratory Data Analysis
+
+The target attribute "G3" is the final year grade (issued at the 3rd period). "G1" and "G2" refers to the 1st and 2nd period grades. The variable of "studytime" describes weekly study time in a scale of 1 to 4, where 1 refers to "less than 2 hours", 2 refers to "2 to 5 hours", 3 refers to "5 to 10 hours" and 4 refers to "greater than 10 hours". 
+
+Since the dataset is combined from two datasets, it generates G3.x, which is the final grade for Portugese language learning, and G3.y, the final grade for mathematics learing. For other variables with ".x" or ".y", similarly, ".x" is from Portugese language learning data, and ".y" is from mathematics learning data.
+
+There are other categorical variables of interest, such as demographic data includes "age" and "sex". This dataset also provides "Medu" as mother's education (numeric: 0 - none,  1 - primary education (4th grade), 2 – 5th to 9th grade, 3 – secondary education or 4 – higher education); and "Fedu" is father's education (numeric: 0 - none,  1 - primary education (4th grade), 2 – 5th to 9th grade, 3 – secondary education or 4 – higher education). Even though metrics on the education level of the parents are provided, income data is not, so this project will not include analysis about the relationship of family income and performance. 
+
+Grades on Math or Portuguese show quite different patterns in relation to the study time. So in the following analysis, we will deal with them in different regressions.
+
+First, we need to examine the data in its context and clean as appropriate. Since our question of interest covers several variables in this dataset, we keep the variables of interest to our analysis and remove only the variables that will not be of use to our regression analysis and variables that are redundant, such as the previous grades “G1” and “G2”, and “absences” as it is repetitive of information found in “study time”. Prior grades are very likely correlated with final grades but are not of primary relevance to our questions of interest of predicting other socioeconomic or demographic factors influencing academic achievement. 
+
+The next step that we take is to remove outlier data points. In the variable of the final grade, we remove a few outliers with a score of zero as these data points might significantly skew or bias our regression without providing as much value towards indicating a larger trend or relation. 
+
+```{r data, warning = FALSE, message = FALSE}
+pacman::p_load(tidyverse, ggplot2, tidyr, dplyr, stargazer) 
+d1=read.table("~/Documents/courses/PSTAT 126/student/student-por.csv",sep=";",header=TRUE) d2=read.table("~/Documents/courses/PSTAT 126/student/student-mat.csv",sep=";",header=TRUE) proj.data=merge(d1,d2,by=c("school","sex","age","address","famsize","Pstatus","Medu","Fedu","Mjob","Fjob","reaso n","nursery","internet")) 
+print(nrow(proj.data)) # 382 students
+
+names(proj.data)
+
+proj.data <- subset(proj.data,select = c(sex, age, address, famsize, Pstatus, Medu, Fedu, Mjob, Fjob, reason, guardian.x, traveltime.x, studytime.x, schoolsup.x, famsup.x, paid.x, activities.x, higher.x, romantic.x, famrel.x, freetime.x, goout.x, health.x, G3.x, guardian.y, traveltime.y, studytime.y, schoolsup.y, famsup.y, paid.y, activities.y, higher.y, romantic.y, famrel.y, freetime.y, goout.y, health.y, G3.y)) 
+
+proj.data <- proj.data %>% 
+ filter(G3.x != 0 & G3.y != 0)
+
+nrow(proj.data) # 340 students
+```
+
+
+I run a quick histogram function to view the distribution of our left-hand variables of Math and Language final grades.  
+
+The final grades for language roughly follow a normal distribution, seen in the histogram, with still a few outliers at the left end; with a minimum of 1 and a maximum of 19. The median is 13 while the mean is 12.82, indicating the distribution is a little left-skewed. 
+
+
+The distribution of the final grades for math is also roughly normal, shown in the histogram. The minimum is 4, maximum is 20. The median is 11 while the mean is 11.6, indicating the distribution is a little right-skewed. The study time for language is right-skewed distributed, with a few outliers at the right end. For both histograms describing study time, the minimum is level 1 (< 2 hours). The maximum is level 4 (> 10 hours).The mean is 2.053 which is a little bigger than the median 2, indicating a right-skew. Study time for math is right-skewed distributed as well, with a few outliers at the right end. The mean is 2.047 which is a little bigger than the median 2, indicating it is right-skewed. The next step is to check how many missing values there are for these two variables, and we find none. 
+
+```{r variables}
+hist(proj.data$G3.x,
+	xlab = "Final Grades for Portugese Language",
+	ylab = "Frequency",
+	main = "Histogram for Final Grades of Portugese language",
+	col = "blue"
+)
+summary(proj.data$G3.x)
+hist(proj.data$G3.y,
+	xlab = "Final Grades for Math",
+	ylab = "Frequency",
+	main = "Histogram for Final Grades of Math",
+	col = "blue"
+)
+summary(proj.data$G3.y)
+hist(proj.data$studytime.x,
+	xlab = "Study Time for Portugese Language",
+	ylab = "Frequency",
+	main = "Histogram for Study Time of Portugese Language",
+	col = "green"
+)
+summary(proj.data$studytime.x)
+hist(proj.data$studytime.y,
+	xlab = "Study Time for Math",
+	ylab = "Frequency",
+	main = "Histogram for Study Time of Math",
+	col = "green"
+)
+summary(proj.data$studytime.y)
+```
+
+
+```{r nas}
+# check for missing values
+proj.data %>% filter(is.na(G3.x)) %>% nrow()
+proj.data %>% filter(is.na(G3.y)) %>% nrow()
+proj.data %>% filter(is.na(studytime.x)) %>% nrow()
+proj.data %>% filter(is.na(studytime.y)) %>% nrow()
+```
+
+
+### Cursory Model
+
+Based off the exploratory analysis above, I created a cursory model to examine the effect of study time on final grades. 
+
+$$Final\_grade_i = \beta_0 + \beta_1 study\_time_i + u_i $$ 
+
+```{r baseline, warning = FALSE}
+baseline.x <- lm(G3.x ~ studytime.x, data = proj.data)
+summary(baseline.x)
+
+baseline.y <- lm(G3.y ~ studytime.y, data = proj.data)
+summary(baseline.y)
+
+stargazer(baseline.x, baseline.y, type = "text", title = "Baseline Regression Results", dep.var.labels = c("Final Grade of Language", "Final Grade of Math"), covariate.labels = c("Study time of Language", "Study Time of Math"))
+```
+
+Upon doing a regression of final grade on study time we find that with no study time the baseline final grade is 11.1633.  For every 1 unit increase, study time has an effect of increasing language final grades by 0.8044. With this baseline regression we find that the β1 for study time is significant at a level of 0.000.
+
+For the math final grades, this effect seems to be less impactful, though still significant at a 0.05 level. The regression results show that with no study time, the baseline final grade is 10.7529 and with every unit increase in study time, final math grades increase by 0.4153. The effect of study time on math seems to be significantly less in magnitude. 
+
+### Testing and confidence interval
+
+The confidence intervals for $\beta_0$ and $\beta_1$ on the two baseline regressions are:
+
+```{r}
+confint(final.x, level = 0.95)
+confint(final.y, level = 0.95)
+```
+
+**t-test on $\beta_1$**
+```{r}
+b1.x = coef(final.x)[2]
+b1.y = coef(final.y)[2]
+se_b1.x = summary(final.x)$coef[2,2]
+se_b1.y = summary(final.y)$coef[2,2]
+t_b1.x = b1.x/se_b1.x
+t_b1.y = b1.y/se_b1.y
+p_b1.x = 2*(1 - pt(q = t_b1.x, df = nrow(proj.data)-2))
+p_b1.x
+p_b1.y = 2*(1 - pt(q = t_b1.y, df = nrow(proj.data)-2))
+p_b1.y
+```
+
+### Graphical representations 
+
+```{r graph1}
+ggplot(proj.data, mapping = aes(studytime.x, G3.x)) +  geom_point() +  
+ xlab("Language Study Time") + 
+ ylab("Language Grade") + 
+ geom_smooth(method = "lm", se = FALSE) 
+
+```
+
+```{r graph1}
+ggplot(proj.data, mapping = aes(studytime.y, G3.y)) + 
+ geom_point() +  
+ xlab("Math Study Time") + 
+ ylab("Math Grade") + 
+ geom_smooth(method = "lm", se = FALSE)
+```
+
+Moving on to the second question of interest, since there have multiple variables, I select the most relevant by viewing the pair relationships to determine which most impactful to include in the final model. 
+
+```{r pairs}
+pairs.data <- subset(proj.data, select = c(G3.x, G3.y, studytime.x, studytime.y, sex, Medu)) pairs(pairs.data)
+```
+
+For ease of interpretation, I transformed the final grade using log as our dependent variable and also transformed parents' educational level into dummy variables of 0 and 1 indicating presence of higher education. 
+
+I then run several regressions and use RSS and AIC values to achieve the most accurate regression model for predicting final grades. Using these results, I then create the best subset of overlapping variables for both BIC and AIC models and plot regression against final grades.
+
+
+```{r mutate}
+proj.data <- proj.data %>% mutate(Medu.d = ifelse(Medu == 4, 1, 0), Fedu.d = ifelse(Fedu == 4, 1, 0)) 
+
+```
+
+```{r stepwise}
+proj.x <- subset(proj.data, select = -c(Medu, Fedu, guardian.y, traveltime.y, studytime.y, schoolsup.y, famsup.y, paid.y, activities.y, higher.y, romantic.y, famrel.y, freetime.y, goout.y, health.y, G3.y)) proj.y <- subset(proj.data, select = -c(Medu, Fedu, guardian.x, traveltime.x, studytime.x, schoolsup.x, famsup.x, paid.x, activities.x, higher.x, romantic.x, famrel.x, freetime.x, goout.x, health.x, G3.x)) mod0.x = lm(log(G3.x) ~ 1, data = proj.x) 
+mod.all.x = lm(log(G3.x) ~., data = proj.x) 
+step(mod0.x, scope = list(lower = mod0.x, upper = mod.all.x)) #AIC
+
+step(mod0.x, scope = list(lower = mod0.x, upper = mod.all.x), k = log(nrow(proj.data))) #BIC
+mod0.y = lm(log(G3.y) ~ 1, data = proj.y)
+mod.all.y = lm(log(G3.y) ~., data = proj.y)
+step(mod0.y, scope = list(lower = mod0.y, upper = mod.all.y)) #AIC
+step(mod0.y, scope = list(lower = mod0.y, upper = mod.all.y), k = log(nrow(proj.data))) #BIC
+```
+
+The AIC result is: log(G3.x) ~ higher.x + goout.x + studytime.x + schoolsup.x + 
+    Medu.d + sex + health.x + paid.x + activities.x + address + 
+    age + Fedu.d + Pstatus
+    log(G3.y) ~ schoolsup.y + goout.y + age + Fedu.d + 
+    studytime.y + sex + address + health.y + Mjob + famsup.y + 
+    higher.y,
+The BIC result is: log(G3.x) ~ higher.x + goout.x + studytime.x + schoolsup.x + 
+    Medu.d + sex,
+    
+    log(G3.y) ~ schoolsup.y + goout.y + age + Fedu.d
+
+    
+Then apply best subset tools:
+    
+```{r best subset, warning = FALSE}
+library(leaps) 
+
+sex=proj.data$sex 
+age=proj.data$age  
+address=proj.data$address 
+famsize=proj.data$famsize 
+Pstatus=proj.data$Pstatus 
+Medu.d=proj.data$Medu.d 
+Fedu.d=proj.data$Fedu.d 
+Mjob=proj.data$Mjob 
+Fjob=proj.data$Fjob 
+reason=proj.data$reason 
+guardian.x=proj.data$guardian.x 
+traveltime.x=proj.data$traveltime.x 
+studytime.x=proj.data$studytime.x 
+schoolsup.x=proj.data$schoolsup.x 
+famsup.x=proj.data$famsup.x 
+paid.x=proj.data$paid.x 
+activities.x=proj.data$activities.x 
+higher.x=proj.data$higher.x 
+romantic.x=proj.data$romantic.x 
+famrel.x=proj.data$famrel.x 
+freetime.x=proj.data$freetime.x 
+goout.x=proj.data$goout.x 
+health.x=proj.data$health.x 
+log.G3.x=log(proj.data$G3.x)
+
+mod = regsubsets(cbind(sex, age, address, famsize, Pstatus, Medu.d, Fedu.d, Mjob, Fjob, reason, guardian.x, traveltime.x, studytime.x, schoolsup.x, famsup.x, paid.x, activities.x, higher.x, romantic.x, famrel.x, freetime.x, goout.x, health.x), log.G3.x) 
+summary.mod = summary(mod) 
+names(summary.mod) 
+
+summary.mod$adjr2 
+```
+
+Models with 7 or 8 predictors have a lower $C_p$ so I selected the most relevant variables of "sex", "Medu.d" "studytime.x", "schoolsup.x", "higher.x", and "goout.x" for the final model.
+
+The final model for language grade is:
+$$Log\_Grade\_language_i=\beta_0+\beta_1sex_i+\beta_2Mother's\_edu+\beta_3studytime_i+\beta_4schoolsup_i+\beta_5higher_i+\beta_6goout_i$$
+
+The final model for the language grade is as follows:
+Log_Grade_language = 2.2893 - 0.0830Male + 0.0857Mother's_edu + 0.0410studytime                   - 0.1323schoolsup + 0.3253higher - 0.0432goout + e
+
+All coefficients are significant at the 0.05 level. Gender, higher achievement of maternal education, amount of study time, availability of academic resources from the school, desire for higher education, and amount of time spent going out can significantly impact final grades for language. Specifically, females on average had an increased expected score of 100 * (exp(0.0830)-1) = 8.65%. Having a mother with higher education can improve the expected score by 100 * (exp(0.0857)-1) = 8.95%. Increasing time spent studying by one level can increase the expected grade by 4.10%. Having extra school support usually indicates 100 * (exp(-0.1323)-1) = - 12.39% lower grades than those without extra school support. Those do not want to pursue higher education will have an expected grade of 100*(exp(0.3253)-1)= 38.44% less than those who want to pursue higher education. Each level increase of time spent going out is expected to decrease expected grade by 4.32%.
+
+```{r best subset 2, warning = FALSE}
+
+final.y <- lm(G3.x ~ sex+age+Fedu.d+studytime.x+schoolsup.x+goout.x, data=proj.data)
+summary(final.y)
+```
+
+Repeat the same procedures for metrics of math scores. 
+
+The final model for language grade is:
+$$Log\_Grade\_math_i=\beta_0+\beta_1sex_i+\beta_2Age_i+\beta_3Father's\_edu_i+\beta_4studytime_i+\beta_5schoolsup_i+\beta_6goout_i$$
+All coefficients are significant at 0.05 level. Gender, age, level of paternal education, amount of time spent studying, availability of academic support through the school, and time spent going out all significantly impact final grades in mathematics. In particular, males can expect to have a higher score by 100 * (exp(0.0894)-1) =  9.35%. Being one year younger can have a 3.77% expected increase in grade. Having a father with higher education can improve the expected score by 100 * (exp(0.0967)-1) = 10.15%. Increasing one level of study time can increase the expected grade by 5.31%. Having extra school support usually indicates 100 * (exp(-0.2188)-1) = -19.65% less expected math grade than those who do not receive additional school support. And lastly, each extra level of going out time decreases expected grade by 5.04%.
+
+# Testing LINE model assumptions
+```{r diagnostic check, warning= FALSE}
+confint(final.x, level = 0.95) 
+confint(final.y, level = 0.95) 
+
+shapiro.test(resid(final.x)) 
+anova(baseline.x, final.x)
+anova(final.y,mod.all.y) 
+
+summary(final.x)$coef 
+summary(final.y)$coef
+```
+
+Now the models for language and math are created, it is essential to see if the assumptions made are valid by checking the LINE model assumptions. I check these assumptions by comparing the plot of residual values to the fitted values to see if the model complies with the linearity and equal variance assumptions. The residuals do not seem to exhibit any noticeable patterns or an uneven spread, likely because we log transformed the final grades for both. 
+
+Then to test for normality, I graphed the q-q plots to test for normality. We see both models follow a linear pattern so our normality conditions are met.
+
+Lastly, run an anova F-test from our baseline regressions to our final model. The results return small p-values, meaning our explanatory variables for both models are significant at the 0.05 level.
+
+## Conclusion
+
+To answer the first question of interest, I found that applying effort by increasing study time can significantly improve student performance in school, in both subjects of language and math. Through further analyses, we see the factors that are most influential on final grades for language are being female, having a mother with higher education, increased study time, decreased school support, having a desire for higher education, and less time spent going out; while being male, younger, having a father with higher education, increased study time, decreased school support, and less time spent going-out are the most influential factors in impacting final math grades. 
+
+Notably, more time spent recreationally with friends can significantly negatively affect the final grade. The takeaway is not that students should completely eliminate their social activities, but if students prioritize stellar academic achievement, they should first look to prioritize and organize how their time is spent. By monitoring how much time is spent out with friends and creating a balance between going out and studying, students are likely to succeed academically. 
+
+Another interesting finding is a negative correlation between final grade and extra educational support from the school (represented by the variable of “schoolsup”). This correlation was quite significant in magnitude. I anticipate this to be explained by adverse selection: students who struggle academically are the ones who are most likely to need and receive extra educational support from the school indicating possible issues with multicollinearity and lack of explanation for which direction the relationship faces in the predictive sense. However, this could also be simply explained by a lack of effective additional academic resources provided by the school. It is also notable that the mother’s level of education can significantly affect language grades, whereas the father’s level of education can significantly affect the math grade. This finding might merit further analysis and cross referencing with other datasets to explore the validity of significance outside the Portuguese secondary schooling system. 
+
+It must be noted that there are other limitations to the scope of this analysis. Firstly, the variable of study time is marked in levels instead of the exact number of hours. It is difficult to pinpoint an effect accurately as we cannot describe a relationship between hours of study to academic performance by unit. Exact units may increase accuracy in data and improve regression results. Also, this dataset is limited to describing two Portuguese secondary schools. The findings of our analysis may not be accurate in describing academic institutions in other cultural contexts, due to different effects of cultural priorities: such as highly funded academic programs provided by schools, or cultural influences of gender on what is acceptable and encouraged to pursue for young children. 
+
+The above analysis may be applicable to other Portuguese schools, but ultimately will not stretch to be as relevant in academic institutions located in other geographical or cultural contexts. 
+
+
