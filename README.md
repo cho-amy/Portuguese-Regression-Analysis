@@ -1,4 +1,4 @@
-# Portuguese-Regression-Analysis
+# Portuguese-Secondary-Schools-Regression-Analysis
 
 This is a project demonstrating basic data cleaning and variable manipulation, exploratory data analysis, feature selection, regression analyses for model creation, and the use of  statistical principles to rigorous test, analyze, and check resultant models. If you would like to view this project in report form, check out the link below!
 
